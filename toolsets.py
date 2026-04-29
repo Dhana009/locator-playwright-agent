@@ -100,6 +100,23 @@ TOOLSETS = {
         ],
         "includes": []
     },
+
+    "playwright-automation": {
+        "description": "Playwright browser automation copilot tools",
+        "tools": [
+            "browser_launch",
+            "page_navigate",
+            "dom_extract",
+            "locator_find",
+            "locator_validate",
+            "action_click",
+            "action_fill",
+            "action_assert",
+            "screenshot_take",
+            "browser_get_state",
+        ],
+        "includes": []
+    },
     
     "file": {
         "description": "File manipulation tools: read, write, patch (with fuzzy matching), and search (content + files)",
