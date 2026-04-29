@@ -93,6 +93,27 @@ def get_sandbox_dir() -> Path:
     return p
 
 
+def get_terminal_scratch_dir() -> Path:
+    """Host scratch directory for terminal-related large artifacts (disk checks, etc.)."""
+    custom_scratch = os.getenv("TERMINAL_SCRATCH_DIR")
+    if custom_scratch:
+        scratch_path = Path(custom_scratch)
+        scratch_path.mkdir(parents=True, exist_ok=True)
+        return scratch_path
+
+    sandbox = get_sandbox_dir() / "terminal_scratch"
+
+    scratch = Path("/scratch")
+    if scratch.exists() and os.access(scratch, os.W_OK):
+        user_scratch = scratch / os.getenv("USER", "hermes") / "hermes-agent"
+        user_scratch.mkdir(parents=True, exist_ok=True)
+        logger.info("Using /scratch for sandboxes: %s", user_scratch)
+        return user_scratch
+
+    sandbox.mkdir(parents=True, exist_ok=True)
+    return sandbox
+
+
 # ---------------------------------------------------------------------------
 # Shared constants and utilities
 # ---------------------------------------------------------------------------

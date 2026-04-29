@@ -8,7 +8,9 @@ from typing import Dict, Iterable, Optional, Set
 
 from hermes_cli.auth import get_nous_auth_status
 from hermes_cli.config import get_env_value, load_config
-from tools.managed_tool_gateway import is_managed_tool_gateway_ready
+def is_managed_tool_gateway_ready(_vendor: str) -> bool:
+    """Managed Nous tool gateway was removed in this minimal tree."""
+    return False
 from utils import is_truthy_value
 from tools.tool_backend_helpers import (
     fal_key_is_configured,

@@ -9,7 +9,6 @@ from typing import Any, Dict, Optional
 import requests
 
 from tools.browser_providers.base import CloudBrowserProvider
-from tools.managed_tool_gateway import resolve_managed_tool_gateway
 from tools.tool_backend_helpers import managed_nous_tools_enabled, prefers_gateway
 
 logger = logging.getLogger(__name__)
@@ -82,15 +81,7 @@ class BrowserUseProvider(CloudBrowserProvider):
                 "managed_mode": False,
             }
 
-        managed = resolve_managed_tool_gateway("browser-use")
-        if managed is None:
-            return None
-
-        return {
-            "api_key": managed.nous_user_token,
-            "base_url": managed.gateway_origin.rstrip("/"),
-            "managed_mode": True,
-        }
+        return None
 
     def _get_config(self) -> Dict[str, Any]:
         config = self._get_config_or_none()

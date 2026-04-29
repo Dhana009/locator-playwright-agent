@@ -92,11 +92,6 @@ from agent.auxiliary_client import (
     get_async_text_auxiliary_client,
 )
 from tools.debug_helpers import DebugSession
-from tools.managed_tool_gateway import (
-    build_vendor_gateway_url,
-    read_nous_access_token as _read_nous_access_token,
-    resolve_managed_tool_gateway,
-)
 from tools.tool_backend_helpers import managed_nous_tools_enabled, prefers_gateway
 from tools.url_safety import is_safe_url
 from tools.website_policy import check_website_access
@@ -133,7 +128,7 @@ def _get_backend() -> str:
     # available backend. Firecrawl also counts as available when the managed
     # tool gateway is configured for Nous subscribers.
     backend_candidates = (
-        ("firecrawl", _has_env("FIRECRAWL_API_KEY") or _has_env("FIRECRAWL_API_URL") or _is_tool_gateway_ready()),
+        ("firecrawl", _has_env("FIRECRAWL_API_KEY") or _has_env("FIRECRAWL_API_URL")),
         ("parallel", _has_env("PARALLEL_API_KEY")),
         ("tavily", _has_env("TAVILY_API_KEY")),
         ("exa", _has_env("EXA_API_KEY")),
@@ -180,14 +175,9 @@ def _get_direct_firecrawl_config() -> Optional[tuple[Dict[str, str], tuple[str, 
     return kwargs, ("direct", api_url or None, api_key or None)
 
 
-def _get_firecrawl_gateway_url() -> str:
-    """Return configured Firecrawl gateway URL."""
-    return build_vendor_gateway_url("firecrawl")
-
-
 def _is_tool_gateway_ready() -> bool:
-    """Return True when gateway URL and a Nous Subscriber token are available."""
-    return resolve_managed_tool_gateway("firecrawl", token_reader=_read_nous_access_token) is not None
+    """Managed Firecrawl gateway was removed in this minimal tree."""
+    return False
 
 
 def _has_direct_firecrawl_config() -> bool:
@@ -252,24 +242,12 @@ def _get_firecrawl_client():
     direct_config = _get_direct_firecrawl_config()
     if direct_config is not None and not prefers_gateway("web"):
         kwargs, client_config = direct_config
+    elif direct_config is not None:
+        # User prefers gateway mode in config, but only direct Firecrawl exists here.
+        kwargs, client_config = direct_config
     else:
-        managed_gateway = resolve_managed_tool_gateway(
-            "firecrawl",
-            token_reader=_read_nous_access_token,
-        )
-        if managed_gateway is None:
-            logger.error("Firecrawl client initialization failed: missing direct config and tool-gateway auth.")
-            _raise_web_backend_configuration_error()
-
-        kwargs = {
-            "api_key": managed_gateway.nous_user_token,
-            "api_url": managed_gateway.gateway_origin,
-        }
-        client_config = (
-            "tool-gateway",
-            kwargs["api_url"],
-            managed_gateway.nous_user_token,
-        )
+        logger.error("Firecrawl client initialization failed: set FIRECRAWL_API_KEY or FIRECRAWL_API_URL.")
+        _raise_web_backend_configuration_error()
 
     if _firecrawl_client is not None and _firecrawl_client_config == client_config:
         return _firecrawl_client
@@ -1989,7 +1967,6 @@ if __name__ == "__main__":
     
     # Check if API keys are available
     web_available = check_web_api_key()
-    tool_gateway_available = _is_tool_gateway_ready()
     firecrawl_key_available = bool(os.getenv("FIRECRAWL_API_KEY", "").strip())
     firecrawl_url_available = bool(os.getenv("FIRECRAWL_API_URL", "").strip())
     nous_available = check_auxiliary_model()
@@ -2009,8 +1986,6 @@ if __name__ == "__main__":
                 print(f"   Using self-hosted Firecrawl: {os.getenv('FIRECRAWL_API_URL').strip().rstrip('/')}")
             elif firecrawl_key_available:
                 print("   Using direct Firecrawl cloud API")
-            elif tool_gateway_available:
-                print(f"   Using Firecrawl tool-gateway: {_get_firecrawl_gateway_url()}")
             else:
                 print("   Firecrawl backend selected but not configured")
     else:
