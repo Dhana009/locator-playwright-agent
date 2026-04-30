@@ -25,6 +25,8 @@ dependencies = [
   "pydantic>=2.12.5,<3",
   # Interactive CLI (prompt_toolkit is used directly by cli.py)
   "prompt_toolkit>=3.0.52,<4",
+  # Playwright co-pilot overlay (start.py --ws-mode)
+  "websockets>=12.0,<17",
   # Tools
   "exa-py>=2.9.0,<3",
   "firecrawl-py>=4.16.0,<5",

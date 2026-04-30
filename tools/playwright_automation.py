@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 import importlib
 import os
+import pathlib
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -304,6 +306,20 @@ async def locator_find(element_data: Dict[str, Any]) -> str:
             if found:
                 return found
 
+        href = _str_value(
+            element_data.get("href", "")
+        )
+        if href and href.startswith("/"):
+            selector = f'a[href="{href}"]'
+            found = await _try(
+                "href",
+                lambda s=selector: _page.locator(s),
+                selector,
+                True,
+            )
+            if found:
+                return found
+
         if text:
             found = await _try(
                 "exact-text",
@@ -320,6 +336,23 @@ async def locator_find(element_data: Dict[str, Any]) -> str:
                 lambda: _page.get_by_text(text, exact=False),
                 f'get_by_text("{text}", exact=False)',
                 True,
+            )
+            if found:
+                return found
+
+        if text and element_data.get("parent_tag"):
+            parent_tag = _str_value(
+                element_data.get("parent_tag", "")
+            )
+            scoped = (
+                f'{parent_tag} >> '
+                f'text="{text}"'
+            )
+            found = await _try(
+                "parent-scoped-text",
+                lambda s=scoped: _page.locator(s),
+                scoped,
+                False,
             )
             if found:
                 return found
@@ -533,6 +566,86 @@ async def browser_get_state() -> str:
         return tool_error(str(e))
 
 
+async def inject_overlay() -> str:
+    try:
+        err = _ensure_page()
+        if err:
+            return err
+
+        overlay_dir = (
+            pathlib.Path(__file__).parent.parent
+            / "overlay"
+        )
+        js_path  = overlay_dir / "overlay.js"
+        css_path = overlay_dir / "overlay.css"
+
+        if not js_path.exists():
+            return tool_error(
+                f"overlay.js not found at {js_path}"
+            )
+        if not css_path.exists():
+            return tool_error(
+                f"overlay.css not found at {css_path}"
+            )
+
+        js_content  = js_path.read_text(encoding="utf-8")
+        css_content = css_path.read_text(encoding="utf-8")
+
+        # Build the combined script.
+        # CSS injected first then JS overlay.
+        css_repr = repr(css_content)
+        combined = f"""(function() {{
+  if (window.__hermesOverlayLoaded) return;
+  var _s = document.createElement('style');
+  _s.id = 'hermes-overlay-styles';
+  _s.textContent = {css_repr};
+  (document.head ||
+   document.documentElement).appendChild(_s);
+}})();
+{js_content}
+"""
+
+        # Inject into current page immediately.
+        await _page.evaluate(combined)
+
+        # Re-inject after every navigation.
+        # page.on("load") fires after page loads —
+        # at that point document.body always exists
+        # and readyState is complete or interactive
+        # so init() in overlay.js runs immediately.
+        async def _reinject():
+            try:
+                await _page.evaluate(combined)
+            except Exception:
+                pass
+
+        # Remove any previous listener first
+        # to avoid stacking multiple listeners
+        # across multiple inject_overlay() calls.
+        try:
+            _page.remove_listener("load", _page.__hermes_load_cb)
+        except Exception:
+            pass
+
+        async def _load_cb():
+            await _reinject()
+
+        _page.__hermes_load_cb = _load_cb
+        _page.on("load", lambda: asyncio.ensure_future(
+            _reinject()
+        ))
+
+        return tool_result({
+            "status": "injected",
+            "message": (
+                "Overlay injected. "
+                "Re-injects on every navigation."
+            )
+        })
+    except Exception as e:
+        return tool_error(str(e))
+
+
 BROWSER_LAUNCH_SCHEMA = {
     "name": "browser_launch",
     "description": "Launch a Playwright Chromium browser instance. Browser stays open for entire session.",
@@ -655,6 +768,16 @@ BROWSER_GET_STATE_SCHEMA = {
     "parameters": {"type": "object", "properties": {}, "required": []},
 }
 
+INJECT_OVERLAY_SCHEMA = {
+    "name": "inject_overlay",
+    "description": "Inject the Hermes overlay UI panel into the current browser page.",
+    "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    },
+}
+
 registry.register(
     name="browser_launch",
     toolset="playwright-automation",
@@ -761,4 +884,13 @@ registry.register(
     handler=lambda args, **kw: browser_get_state(),
     is_async=True,
     emoji="🧭",
+)
+
+registry.register(
+    name="inject_overlay",
+    toolset="playwright-automation",
+    schema=INJECT_OVERLAY_SCHEMA,
+    handler=lambda args, **kw: inject_overlay(),
+    is_async=True,
+    emoji="🖥️",
 )
